@@ -31,9 +31,9 @@
 
 
 // КАЛИБРОВКА
-#define COUNTS_PER_REV 72150
+#define COUNTS_PER_REV 71700
 #define WHEEL_DIAMETER 0.115   
-#define LR_WHEELS_DISTANCE 0.54 
+#define LR_WHEELS_DISTANCE 0.52 
 #define MAX_RPM 160 
 
 
