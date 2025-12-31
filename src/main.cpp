@@ -15,12 +15,15 @@
 #include "imu.h"
 #include "encoder.h"  
 #include "pid.h"     
+#include "Ramp.h"
 
-// === НАСТРОЙКИ ===
 #define SERIAL_BAUD 230400      
 #define CMD_INTERVAL_MS 20      
 #define LOOP_INTERVAL_S 0.04    
 #define WATCHDOG_TIMEOUT 500    
+
+#define LINEAR_ACCEL 0.02  
+#define ANGULAR_ACCEL 0.06
 
 Motor motor1(MOTOR1_IN_A, MOTOR1_IN_B);
 Motor motor2(MOTOR2_IN_A, MOTOR2_IN_B);
@@ -30,6 +33,9 @@ PID pid1(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID pid2(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 Kinematics kinematics(LINO_BASE, WHEEL_DIAMETER, LR_WHEELS_DISTANCE, MAX_RPM);
 IMU imu;
+
+Ramp ramp_linear(LINEAR_ACCEL);
+Ramp ramp_angular(ANGULAR_ACCEL);
 
 rcl_subscription_t subscriber;
 geometry_msgs__msg__Twist msg;
@@ -47,18 +53,21 @@ rcl_node_t node;
 
 float pos_x = 0.0; float pos_y = 0.0; float theta = 0.0;
 unsigned long last_time = 0;
-float target_linear_x = 0.0; float target_angular_z = 0.0;
+
+float target_linear_x_raw = 0.0; 
+float target_angular_z_raw = 0.0;
 unsigned long last_cmd_received_time = 0; 
 
 void subscription_callback(const void * msgin) {
-    last_cmd_received_time = millis(); // Watchdog жив
+    last_cmd_received_time = millis(); 
     static unsigned long last_processed_cmd = 0;
     if (millis() - last_processed_cmd < CMD_INTERVAL_MS) return; 
     last_processed_cmd = millis();
 
     const geometry_msgs__msg__Twist * msg_in_typed = (const geometry_msgs__msg__Twist *)msgin;
-    target_linear_x = msg_in_typed->linear.x;
-    target_angular_z = msg_in_typed->angular.z;
+    
+    target_linear_x_raw = msg_in_typed->linear.x;
+    target_angular_z_raw = msg_in_typed->angular.z;
 }
 
 void light_callback(const void * msgin) {
@@ -77,6 +86,9 @@ void setup() {
   encoder1.init();
   encoder2.init();
 
+  ramp_linear.reset();
+  ramp_angular.reset();
+
   while (rmw_uros_ping_agent(100, 1) != RMW_RET_OK) {
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));
       delay(100);
@@ -93,11 +105,9 @@ void setup() {
       for(int i=0; i<3; i++) { digitalWrite(LIGHT_PIN, HIGH); delay(50); digitalWrite(LIGHT_PIN, LOW); delay(50); }
   }
 
-  // 1. ВХОД: BEST EFFORT (Безопасность прежде всего)
   rclc_subscription_init_best_effort(&subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel");
   rclc_subscription_init_default(&light_subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "cmd_light");
 
-  // 2. ВЫХОД: DEFAULT / RELIABLE (Для точности SLAM)
   rclc_publisher_init_default(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data");
   rclc_publisher_init_default(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered");
 
@@ -105,12 +115,16 @@ void setup() {
   odom_msg.header.frame_id.size = strlen("odom");
   odom_msg.child_frame_id.data = (char*)"base_link";
   odom_msg.child_frame_id.size = strlen("base_link");
-  odom_msg.pose.covariance[0] = 0.0001; odom_msg.pose.covariance[7] = 0.0001; odom_msg.pose.covariance[35] = 0.05;
+  odom_msg.pose.covariance[0] = 0.0001; 
+  odom_msg.pose.covariance[7] = 0.0001; 
+  odom_msg.pose.covariance[35] = 0.1;
   odom_msg.pose.pose.orientation.w = 1.0; 
 
   imu_msg.header.frame_id.data = (char*)"imu_link";
   imu_msg.header.frame_id.size = strlen("imu_link");
-  imu_msg.orientation_covariance[0] = 0.1; imu_msg.angular_velocity_covariance[0] = 0.03; imu_msg.linear_acceleration_covariance[0] = 0.4;
+  imu_msg.orientation_covariance[0] = 0.1; 
+  imu_msg.angular_velocity_covariance[0] = 0.02; 
+  imu_msg.linear_acceleration_covariance[0] = 0.4;
   imu_msg.orientation.w = 1.0; 
 
   rclc_executor_init(&executor, &support.context, 2, &allocator);
@@ -125,8 +139,9 @@ void loop() {
   rclc_executor_spin_some(&executor, RCL_MS_TO_NS(0)); 
 
   unsigned long now = millis();
+  
   if ((now - last_cmd_received_time) > WATCHDOG_TIMEOUT) {
-      target_linear_x = 0.0; target_angular_z = 0.0;
+      target_linear_x_raw = 0.0; target_angular_z_raw = 0.0;
   }
 
   float dt = (now - last_time) / 1000.0;
@@ -150,12 +165,26 @@ void loop() {
 
       if (isnan(pos_x) || isnan(pos_y) || isnan(theta)) { pos_x=0; pos_y=0; theta=0; vel.linear_x=0; vel.angular_z=0; }
 
-      float lin = target_linear_x; float ang = target_angular_z;
-      if (abs(lin) < 0.05) lin = 0;
-      if (abs(ang) < 0.05) ang = 0;
+      if (target_linear_x_raw == 0) {
+          ramp_linear.setStep(0.9); // 1.0 = мгновенно
+      } else {
+          ramp_linear.setStep(0.02); // 0.02 = мягкий старт
+      }
+      float smooth_linear = ramp_linear.update(target_linear_x_raw);
 
-      rpm t_rpm = kinematics.getRPM(lin, 0.0, ang);
-      if (lin == 0 && ang == 0) {
+      if (target_angular_z_raw == 0) {
+          ramp_angular.setStep(1.0); 
+      } else {
+          ramp_angular.setStep(0.06); 
+      }
+      float smooth_angular = ramp_angular.update(target_angular_z_raw);
+
+      if (abs(smooth_linear) < 0.02) smooth_linear = 0;
+      if (abs(smooth_angular) < 0.02) smooth_angular = 0;
+
+      rpm t_rpm = kinematics.getRPM(smooth_linear, 0.0, smooth_angular);
+
+      if (smooth_linear == 0 && smooth_angular == 0) {
            pid1.reset(); pid2.reset();
            motor1.spin(0); motor2.spin(0);
       } else {
@@ -163,8 +192,6 @@ void loop() {
            motor2.spin(pid2.compute(t_rpm.motor2, rpm2));
       }
 
-      // !!! ЧИСТОЕ ВРЕМЯ !!!
-      // Никаких +50ms. SLAM получит честное время.
       int64_t time_ns = rmw_uros_epoch_nanos();
       
       odom_msg.header.stamp.sec = time_ns / 1000000000;
