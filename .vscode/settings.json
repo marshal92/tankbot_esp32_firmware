@@ -1,0 +1,15 @@
+{
+  "ROS2.distro": "jazzy",
+  "python.autoComplete.extraPaths": [
+    "/home/oleksandr/ros2_ws/install/tmd_test_urdf/lib/python3.12/site-packages",
+    "/home/oleksandr/ros2_ws/install/tmb_robot_description/lib/python3.12/site-packages",
+    "/home/oleksandr/ros2_ws/install/linorobot2_gazebo/lib/python3.12/site-packages",
+    "/opt/ros/jazzy/lib/python3.12/site-packages"
+  ],
+  "python.analysis.extraPaths": [
+    "/home/oleksandr/ros2_ws/install/tmd_test_urdf/lib/python3.12/site-packages",
+    "/home/oleksandr/ros2_ws/install/tmb_robot_description/lib/python3.12/site-packages",
+    "/home/oleksandr/ros2_ws/install/linorobot2_gazebo/lib/python3.12/site-packages",
+    "/opt/ros/jazzy/lib/python3.12/site-packages"
+  ]
+}

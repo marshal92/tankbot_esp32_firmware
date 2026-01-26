@@ -16,6 +16,7 @@ class IMU {
 
     private:
         LSM6DS3 myIMU; // Объект библиотеки /*  */ SparkFun
+        float filter_ax, filter_ay, filter_az;
 };
 
 #endif

@@ -19,7 +19,7 @@
 
 #define SERIAL_BAUD 230400      
 #define CMD_INTERVAL_MS 20      
-#define LOOP_INTERVAL_S 0.04    
+#define LOOP_INTERVAL_S 0.01    
 #define WATCHDOG_TIMEOUT 500    
 
 #define LINEAR_ACCEL 0.02  
@@ -108,7 +108,7 @@ void setup() {
   rclc_subscription_init_best_effort(&subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel");
   rclc_subscription_init_default(&light_subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "cmd_light");
 
-  rclc_publisher_init_default(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data");
+  rclc_publisher_init_default(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data_raw");
   rclc_publisher_init_default(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered");
 
   odom_msg.header.frame_id.data = (char*)"odom";
@@ -123,8 +123,17 @@ void setup() {
   imu_msg.header.frame_id.data = (char*)"imu_link";
   imu_msg.header.frame_id.size = strlen("imu_link");
   imu_msg.orientation_covariance[0] = 0.1; 
+  imu_msg.orientation_covariance[4] = 0.1;
+  imu_msg.orientation_covariance[8] = 0.1;
+
   imu_msg.angular_velocity_covariance[0] = 0.02; 
+  imu_msg.angular_velocity_covariance[4] = 0.02;
+  imu_msg.angular_velocity_covariance[8] = 0.02;
+
   imu_msg.linear_acceleration_covariance[0] = 0.4;
+  imu_msg.linear_acceleration_covariance[4] = 0.4;
+  imu_msg.linear_acceleration_covariance[8] = 0.4;
+
   imu_msg.orientation.w = 1.0; 
 
   rclc_executor_init(&executor, &support.context, 2, &allocator);
@@ -136,6 +145,11 @@ void setup() {
 }
 
 void loop() {
+
+  if (rmw_uros_epoch_millis() < 10000000 || millis() % 10000 < 50) { 
+      rmw_uros_sync_session(20); 
+  }
+
   rclc_executor_spin_some(&executor, RCL_MS_TO_NS(0)); 
 
   unsigned long now = millis();
