@@ -2,8 +2,8 @@
 #define IMU_H
 
 #include <Arduino.h>
-#include "SparkFunLSM6DS3.h" // Подключаем SparkFun
-#include "Wire.h"
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 #include <geometry_msgs/msg/vector3.h>
 
 class IMU {
@@ -15,7 +15,7 @@ class IMU {
         geometry_msgs__msg__Vector3 readGyroscope();
 
     private:
-        LSM6DS3 myIMU; // Объект библиотеки /*  */ SparkFun
+        Adafruit_MPU6050 myIMU; // Об'єкт для MPU6050
         float filter_ax, filter_ay, filter_az;
 };
 

@@ -8,6 +8,7 @@
 #include <nav_msgs/msg/odometry.h>
 #include <std_msgs/msg/bool.h>
 #include <rmw_microros/rmw_microros.h>
+#include <Wire.h>
 
 #include "lino_base_config.h"
 #include "motor.h"
@@ -17,7 +18,7 @@
 #include "pid.h"     
 #include "Ramp.h"
 
-#define SERIAL_BAUD 230400      
+#define SERIAL_BAUD 115200      
 #define CMD_INTERVAL_MS 20      
 #define LOOP_INTERVAL_S 0.01    
 #define WATCHDOG_TIMEOUT 500    
@@ -79,6 +80,9 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   set_microros_serial_transports(Serial);
   
+  // --- ВАЖНО: Назначаем I2C пины для S3 ---
+  Wire.begin(I2C_SDA, I2C_SCL);
+
   pinMode(LED_PIN, OUTPUT);
   pinMode(LIGHT_PIN, OUTPUT);
   digitalWrite(LIGHT_PIN, LOW); 
@@ -108,8 +112,10 @@ void setup() {
   rclc_subscription_init_best_effort(&subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel");
   rclc_subscription_init_default(&light_subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "cmd_light");
 
-  rclc_publisher_init_default(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data_raw");
-  rclc_publisher_init_default(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered");
+  //rclc_publisher_init_default(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data_raw");
+  //rclc_publisher_init_default(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered");
+  rclc_publisher_init_best_effort(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data_raw");
+  rclc_publisher_init_best_effort(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered");
 
   odom_msg.header.frame_id.data = (char*)"odom";
   odom_msg.header.frame_id.size = strlen("odom");
@@ -199,11 +205,16 @@ void loop() {
       rpm t_rpm = kinematics.getRPM(smooth_linear, 0.0, smooth_angular);
 
       if (smooth_linear == 0 && smooth_angular == 0) {
-           pid1.reset(); pid2.reset();
+           //pid1.reset(); pid2.reset();
            motor1.spin(0); motor2.spin(0);
       } else {
            motor1.spin(pid1.compute(t_rpm.motor1, rpm1));
            motor2.spin(pid2.compute(t_rpm.motor2, rpm2));
+           
+           // ВРЕМЕННЫЙ ВЫВОД RPM (можно раскомментировать для отладки)
+           //int test_pwm = 50; 
+           //motor1.spin(t_rpm.motor1 > 0 ? test_pwm : (t_rpm.motor1 < 0 ? -test_pwm : 0));
+           //motor2.spin(t_rpm.motor2 > 0 ? test_pwm : (t_rpm.motor2 < 0 ? -test_pwm : 0));
       }
 
       int64_t time_ns = rmw_uros_epoch_nanos();
@@ -218,6 +229,12 @@ void loop() {
       if (isnan(odom_msg.pose.pose.orientation.z)) { odom_msg.pose.pose.orientation.z = 0.0; odom_msg.pose.pose.orientation.w = 1.0; }
       odom_msg.twist.twist.linear.x = vel.linear_x;
       odom_msg.twist.twist.angular.z = vel.angular_z;
+
+      // --- ВРЕМЕННЫЙ ВЫВОД RPM ---
+      // Прячем обороты левого (y) и правого (z) колеса в неиспользуемые оси
+      //odom_msg.twist.twist.linear.y = rpm1; 
+      //odom_msg.twist.twist.linear.z = rpm2; 
+      // ---------------------------
 
       imu_msg.header.stamp = odom_msg.header.stamp;
       imu_msg.linear_acceleration = imu.readAccelerometer();

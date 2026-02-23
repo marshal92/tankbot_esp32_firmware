@@ -11,24 +11,28 @@
 
 // ПИНЫ МОТОРОВ
 // Левый
-#define MOTOR1_IN_A 25
-#define MOTOR1_IN_B 26
+#define MOTOR1_IN_A 4
+#define MOTOR1_IN_B 5
 // Правый
-#define MOTOR2_IN_A 27
-#define MOTOR2_IN_B 14
+#define MOTOR2_IN_A 6
+#define MOTOR2_IN_B 7
 
 // ЭНКОДЕРЫ
 // Левый
-#define MOTOR1_ENC_A 18
-#define MOTOR1_ENC_B 19
+#define MOTOR1_ENC_A 8
+#define MOTOR1_ENC_B 9
 // Правый
-#define MOTOR2_ENC_A 4  
-#define MOTOR2_ENC_B 13
+#define MOTOR2_ENC_A 10
+#define MOTOR2_ENC_B 11
 
-// ПИНЫ ДЛЯ СВЕТА
-#define LED_PIN 2
-#define LIGHT_PIN 15
+// --- I2C (IMU) ---
+// Выбрали GPIO 1 и 2 (они свободны и безопасны)
+#define I2C_SDA 1
+#define I2C_SCL 2
 
+// --- СВЕТ ---
+#define LED_PIN 48    // Встроенный RGB светодиод (или просто LED)
+#define LIGHT_PIN 38  // Внешний свет
 
 // КАЛИБРОВКА
 #define COUNTS_PER_REV 71700
