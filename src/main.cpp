@@ -114,7 +114,7 @@ void setup() {
 
   //rclc_publisher_init_default(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data_raw");
   //rclc_publisher_init_default(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered");
-  rclc_publisher_init_best_effort(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data_raw");
+  rclc_publisher_init_best_effort(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data");
   rclc_publisher_init_best_effort(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered");
 
   odom_msg.header.frame_id.data = (char*)"odom";
@@ -235,11 +235,12 @@ void loop() {
       //odom_msg.twist.twist.linear.y = rpm1; 
       //odom_msg.twist.twist.linear.z = rpm2; 
       // ---------------------------
+      imu.update(); // <-- Обязательно дергаем эту функцию для вычитывания буфера BNO085
 
       imu_msg.header.stamp = odom_msg.header.stamp;
       imu_msg.linear_acceleration = imu.readAccelerometer();
       imu_msg.angular_velocity = imu.readGyroscope();
-      imu_msg.orientation.x = 0.0; imu_msg.orientation.y = 0.0; imu_msg.orientation.z = 0.0; imu_msg.orientation.w = 1.0; 
+      imu_msg.orientation = imu.readOrientation();
 
       (void)rcl_publish(&imu_publisher, &imu_msg, NULL);
       (void)rcl_publish(&odom_publisher, &odom_msg, NULL);

@@ -29,7 +29,7 @@
 // Выбрали GPIO 1 и 2 (они свободны и безопасны)
 #define I2C_SDA 1
 #define I2C_SCL 2
-
+#define IMU_RST_PIN 42
 // --- СВЕТ ---
 #define LED_PIN 48    // Встроенный RGB светодиод (или просто LED)
 #define LIGHT_PIN 38  // Внешний свет
